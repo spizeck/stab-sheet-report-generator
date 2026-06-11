@@ -66,6 +66,36 @@ npm run start
 npm run lint
 ```
 
+### Testing
+
+The project uses [Vitest](https://vitest.dev/) for testing with [Testing Library](https://testing-library.com/) for DOM assertions.
+
+```bash
+# Run tests once
+npm test
+
+# Run tests in watch mode (for development)
+npm run test:watch
+
+# Run tests with coverage report
+npm run test:coverage
+```
+
+#### Test Coverage
+
+The test suite targets 90%+ coverage of:
+- `src/lib/stabSheetCalculations.ts` — Coordinate matching, cut/fill calculations, design thickness adjustments, summary counts
+- `src/lib/parseSurveyFile.ts` — File parsing, header alias mapping, delimiter detection
+
+#### Test Categories
+
+- **Coordinate matching logic** — Tests for point matching by Northing/Easting with 3-decimal rounding
+- **Cut/Fill/On Grade calculations** — Tests for all three status classifications
+- **Design thickness adjustments** — Tests for pavement thickness subtraction
+- **Unmatched point detection** — Tests for identifying orphaned points
+- **File parsing** — Tests for CSV, tab-delimited, semicolon-delimited formats
+- **Header alias mapping** — Tests for various column name variations (e.g., "north", "y", "n" for Northing)
+
 ## Deployment on Vercel
 
 This app is optimized for deployment on [Vercel](https://vercel.com):
