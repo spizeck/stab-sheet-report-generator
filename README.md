@@ -1,36 +1,130 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Stab Sheet Report Generator
 
-## Getting Started
+A professional survey analysis tool for comparing As-Built and Design elevation data. Built for construction quality control, paving inspection, and civil engineering projects.
 
-First, run the development server:
+## What This App Does
+
+The Stab Sheet Report Generator helps engineers, inspectors, and project managers analyze survey data by comparing **As-Built** field measurements against **Design** specifications.
+
+### How It Works
+
+1. **Upload two survey files**:
+   - **As-Built File**: Field-measured elevations with point IDs, Northing, Easting, and elevation
+   - **Design File**: Design elevations with matching coordinate format
+
+2. **Automatic Point Matching**: The app matches points by comparing Northing and Easting coordinates (rounded to 3 decimal places). As-Built point names are always used in the final report.
+
+3. **Cut/Fill Analysis**: For each matched point, the app calculates:
+   ```
+   adjustedDesignElevation = designElevation - designThickness
+   difference = asBuiltElevation - adjustedDesignElevation
+   ```
+
+4. **Status Classification**:
+   - **Cut** (positive difference): As-Built is higher than design — material needs to be removed
+   - **Fill** (negative difference): As-Built is lower than design — material needs to be added
+   - **On Grade** (zero difference): Matches design specification exactly
+
+5. **Generate PDF Report**: Export a professional report with summary statistics and point-by-point results.
+
+## Local Development
+
+### Prerequisites
+
+- Node.js 18+ 
+- npm, yarn, pnpm, or bun
+
+### Setup
 
 ```bash
+# Clone the repository
+git clone <repository-url>
+cd stab-sheet-report-generator
+
+# Install dependencies
+npm install
+
+# Run the development server
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) to view the app.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Build
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+# Create production build
+npm run build
 
-## Learn More
+# Preview production build locally
+npm run start
+```
 
-To learn more about Next.js, take a look at the following resources:
+### Lint
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+npm run lint
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Deployment on Vercel
 
-## Deploy on Vercel
+This app is optimized for deployment on [Vercel](https://vercel.com):
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+1. Push your code to GitHub
+2. Import the repository in Vercel
+3. Deploy with default settings (Next.js preset)
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+No additional environment variables or server configuration are required for the current client-side-only version.
+
+**Important**: For production deployments, ensure HTTPS is enabled to protect any sensitive project data during file processing.
+
+## Supported Upload Formats
+
+The app accepts survey files in the following formats:
+
+- **CSV** (comma-separated values)
+- **TXT** (plain text)
+- **Tab-delimited** files
+- **Semicolon-delimited** files
+- Files with **space-separated** columns
+
+### Expected Column Structure
+
+Files should contain:
+- Point ID
+- Northing coordinate
+- Easting coordinate
+- Elevation (As-Built or Design)
+
+The app automatically detects headers and common column name variations. For headerless files, a swap N/E toggle is available if your file uses Easting/Northing order.
+
+## Current Limitations
+
+- **Client-side processing only**: All calculations happen in the browser
+- **No database**: Data is not persisted between sessions
+- **No user accounts**: No authentication or user management
+- **No server-side file storage**: Files exist only in memory during processing
+- **Coordinate matching**: Currently rounds to 3 decimal places for matching
+
+## Future Feature Ideas
+
+- Tolerance highlighting for pass/fail indicators
+- Export history and saved reports
+- PDF branding with company logos
+- Additional unit options (feet/inches, fractional display)
+- Advanced column mapping for non-standard file formats
+- Better handling and reporting of unmatched points
+- Bulk file processing
+- Report templates for DOT/FAA/USACE compliance
+
+## Contributing
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines on contributing to this project.
+
+## Security
+
+See [SECURITY.md](./SECURITY.md) for security considerations and responsible disclosure.
+
+## License
+
+[MIT License](./LICENSE) - Copyright (c) 2026 Chad Nuttall
