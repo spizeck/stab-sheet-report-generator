@@ -26,6 +26,7 @@ import SummaryCards from "@/src/components/SummaryCards";
 import ResultsTable from "@/src/components/ResultsTable";
 import { parseAsBuiltFile, parseDesignFile } from "@/src/lib/parseSurveyFile";
 import { matchAndCalculate, buildSummary } from "@/src/lib/stabSheetCalculations";
+import { exportPdf } from "@/src/lib/exportPdf";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -69,7 +70,7 @@ const DEFAULT_REPORT_INFO: ReportInfo = {
   projectId: "",
   projectDescription: "",
   designThickness: 0,
-  unitSystem: "decimal-feet",
+  unitSystem: "feet",
 };
 
 const EMPTY_MATCH_RESULT: MatchResult = {
@@ -84,6 +85,14 @@ const EMPTY_MATCH_RESULT: MatchResult = {
 
 export default function StabSheetPage() {
   const [reportInfo, setReportInfo] = useState<ReportInfo>(DEFAULT_REPORT_INFO);
+
+  // Raw file content kept in state so re-parsing on swapNE toggle is instant
+  const [asBuiltContent, setAsBuiltContent] = useState<string | null>(null);
+  const [designContent,  setDesignContent]  = useState<string | null>(null);
+
+  // Swap N/E toggle – only affects headerless files
+  const [asBuiltSwapNE, setAsBuiltSwapNE] = useState(false);
+  const [designSwapNE,  setDesignSwapNE]  = useState(false);
 
   // Raw parsed points stored separately so matching reruns on any form change
   const [asBuiltPoints, setAsBuiltPoints]   = useState<RawAsBuiltPoint[]>([]);
@@ -112,30 +121,52 @@ export default function StabSheetPage() {
     setMatchResult(result);
   }, [asBuiltPoints, designPoints, reportInfo.designThickness]);
 
-  // ── File handlers ───────────────────────────────────────────────────────
+  // ── Shared parse helpers ────────────────────────────────────────────────
 
-  function handleAsBuiltFileRead(content: string, fileName: string) {
+  function applyAsBuilt(content: string, swapNE: boolean) {
     setAsBuiltError(null);
     setAsBuiltWarnings([]);
     setAsBuiltPoints([]);
-    setAsBuiltFileName(fileName);
-
-    const { points, warnings, error } = parseAsBuiltFile(content);
+    const { points, warnings, error } = parseAsBuiltFile(content, swapNE);
     if (error) { setAsBuiltError(error); return; }
     setAsBuiltWarnings(warnings);
     setAsBuiltPoints(points);
   }
 
-  function handleDesignFileRead(content: string, fileName: string) {
+  function applyDesign(content: string, swapNE: boolean) {
     setDesignError(null);
     setDesignWarnings([]);
     setDesignPoints([]);
-    setDesignFileName(fileName);
-
-    const { points, warnings, error } = parseDesignFile(content);
+    const { points, warnings, error } = parseDesignFile(content, swapNE);
     if (error) { setDesignError(error); return; }
     setDesignWarnings(warnings);
     setDesignPoints(points);
+  }
+
+  // ── File handlers ───────────────────────────────────────────────────────
+
+  function handleAsBuiltFileRead(content: string, fileName: string) {
+    setAsBuiltFileName(fileName);
+    setAsBuiltContent(content);
+    applyAsBuilt(content, asBuiltSwapNE);
+  }
+
+  function handleDesignFileRead(content: string, fileName: string) {
+    setDesignFileName(fileName);
+    setDesignContent(content);
+    applyDesign(content, designSwapNE);
+  }
+
+  // ── Swap toggle handlers – re-parse immediately if a file is already loaded
+
+  function handleAsBuiltSwapChange(checked: boolean) {
+    setAsBuiltSwapNE(checked);
+    if (asBuiltContent) applyAsBuilt(asBuiltContent, checked);
+  }
+
+  function handleDesignSwapChange(checked: boolean) {
+    setDesignSwapNE(checked);
+    if (designContent) applyDesign(designContent, checked);
   }
 
   // ── Derived state ───────────────────────────────────────────────────────
@@ -174,7 +205,7 @@ export default function StabSheetPage() {
                 Stab Sheet Report Generator
               </h1>
               <p className="text-xs text-blue-200">
-                Paving &amp; Concrete Survey Analysis Tool
+                Survey Analysis Tool
               </p>
             </div>
           </div>
@@ -196,7 +227,18 @@ export default function StabSheetPage() {
               onFileRead={handleAsBuiltFileRead}
               currentFileName={asBuiltFileName}
             />
-            {asBuiltError    && <ErrorBox   label="As-Built Parse Error"    error={asBuiltError} />}
+            {/* Swap toggle – only relevant for headerless files */}
+            <label className="flex items-center gap-2 cursor-pointer select-none text-sm text-gray-600">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-gray-300 text-blue-600"
+                checked={asBuiltSwapNE}
+                onChange={(e) => handleAsBuiltSwapChange(e.target.checked)}
+              />
+              Headerless file uses <span className="font-mono font-medium">E, N</span> order
+              (swap Easting &amp; Northing)
+            </label>
+            {asBuiltError && <ErrorBox label="As-Built Parse Error" error={asBuiltError} />}
             {asBuiltWarnings.length > 0 && (
               <WarningBox label="As-Built Warnings" warnings={asBuiltWarnings} />
             )}
@@ -209,7 +251,18 @@ export default function StabSheetPage() {
               onFileRead={handleDesignFileRead}
               currentFileName={designFileName}
             />
-            {designError    && <ErrorBox   label="Design Parse Error"    error={designError} />}
+            {/* Swap toggle – only relevant for headerless files */}
+            <label className="flex items-center gap-2 cursor-pointer select-none text-sm text-gray-600">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-gray-300 text-blue-600"
+                checked={designSwapNE}
+                onChange={(e) => handleDesignSwapChange(e.target.checked)}
+              />
+              Headerless file uses <span className="font-mono font-medium">E, N</span> order
+              (swap Easting &amp; Northing)
+            </label>
+            {designError && <ErrorBox label="Design Parse Error" error={designError} />}
             {designWarnings.length > 0 && (
               <WarningBox label="Design Warnings" warnings={designWarnings} />
             )}
@@ -225,8 +278,26 @@ export default function StabSheetPage() {
           </div>
         )}
 
-        {/* Section 3 – Summary cards */}
-        {hasResults && <SummaryCards summary={summary} />}
+        {/* Section 3 – Summary cards + Export button */}
+        {hasResults && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              <SummaryCards summary={summary} />
+            </div>
+            <div className="flex justify-end">
+              <button
+                onClick={() => exportPdf(reportInfo, matchResult, summary)}
+                className="inline-flex items-center gap-2 rounded-lg bg-blue-700 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-800 active:scale-95 transition-all"
+              >
+                {/* Download icon */}
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M12 4v12m0 0l-4-4m4 4l4-4" />
+                </svg>
+                Export PDF
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Section 4 – Results table */}
         {hasResults && (

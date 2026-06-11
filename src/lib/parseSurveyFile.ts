@@ -148,26 +148,33 @@ function resolveBaseFromHeaders(
 /**
  * Positional mapping for headerless files.
  *
- * 4-col:  Point | Northing | Easting | Elevation
- * 5-col:  Point | Northing | Easting | Design Elev | As-Built Elev
+ * Default column order:  Point | Northing | Easting | Elevation
+ * With swapNE = true:    Point | Easting  | Northing | Elevation
+ *   (use this when a headerless export uses E, N order instead of N, E)
+ *
+ * 4-col:  Point | N | E | Elevation
+ * 5-col:  Point | N | E | Design Elev | As-Built Elev
  *
  * For As-Built files:  elevation is always the LAST column (col 3 or col 4).
  * For Design files:    elevation is always col 3 (the 4th column).
  */
 function resolvePositional(
   colCount: number,
-  role: "asbuilt" | "design"
+  role: "asbuilt" | "design",
+  swapNE: boolean
 ): BaseColumnMap | null {
+  // When swapNE is true, columns 1 and 2 are swapped (E comes before N).
+  const colNorthing = swapNE ? 2 : 1;
+  const colEasting  = swapNE ? 1 : 2;
+
   if (colCount === 4) {
-    // 4-column: single elevation in col 3 regardless of role
-    return { colPointId: 0, colNorthing: 1, colEasting: 2, colElev: 3 };
+    return { colPointId: 0, colNorthing, colEasting, colElev: 3 };
   }
   if (colCount >= 5) {
-    // 5-column: design = col 3, as-built = col 4
     return {
       colPointId: 0,
-      colNorthing: 1,
-      colEasting: 2,
+      colNorthing,
+      colEasting,
       colElev: role === "design" ? 3 : 4,
     };
   }
@@ -228,7 +235,8 @@ function parseRows(
 
 function parseFile(
   fileContent: string,
-  role: "asbuilt" | "design"
+  role: "asbuilt" | "design",
+  swapNE: boolean
 ): { rows: ParsedRow[]; warnings: string[]; error: string | null } {
   const warnings: string[] = [];
 
@@ -266,8 +274,15 @@ function parseFile(
       };
     }
   } else {
-    colMap = resolvePositional(firstRowCells.length, role);
+    colMap = resolvePositional(firstRowCells.length, role, swapNE);
     dataStart = 0;
+
+    // Let the caller know a coordinate swap was applied so it shows up in warnings
+    if (swapNE && colMap) {
+      warnings.push(
+        "Headerless file: Northing and Easting columns were swapped (E, N order assumed)."
+      );
+    }
 
     if (!colMap) {
       return {
@@ -300,10 +315,17 @@ function parseFile(
 /**
  * Parses an As-Built survey file.
  * Expects: Point ID, Northing, Easting, As-Built Elevation
- * (4-column headerless files are supported – the 4th column is the elevation)
+ *
+ * @param fileContent - Raw text of the uploaded file
+ * @param swapNE      - Set to true when a headerless file uses E, N column order
+ *                      instead of the standard N, E order. Has no effect on
+ *                      headered files (columns are identified by name).
  */
-export function parseAsBuiltFile(fileContent: string): AsBuiltParseResult {
-  const { rows, warnings, error } = parseFile(fileContent, "asbuilt");
+export function parseAsBuiltFile(
+  fileContent: string,
+  swapNE = false
+): AsBuiltParseResult {
+  const { rows, warnings, error } = parseFile(fileContent, "asbuilt", swapNE);
   if (error) return { points: [], warnings, error };
 
   const points: RawAsBuiltPoint[] = rows.map((r) => ({
@@ -319,10 +341,17 @@ export function parseAsBuiltFile(fileContent: string): AsBuiltParseResult {
 /**
  * Parses a Design survey file.
  * Expects: Point ID, Northing, Easting, Design Elevation
- * (4-column headerless files are supported – the 4th column is the elevation)
+ *
+ * @param fileContent - Raw text of the uploaded file
+ * @param swapNE      - Set to true when a headerless file uses E, N column order
+ *                      instead of the standard N, E order. Has no effect on
+ *                      headered files (columns are identified by name).
  */
-export function parseDesignFile(fileContent: string): DesignParseResult {
-  const { rows, warnings, error } = parseFile(fileContent, "design");
+export function parseDesignFile(
+  fileContent: string,
+  swapNE = false
+): DesignParseResult {
+  const { rows, warnings, error } = parseFile(fileContent, "design", swapNE);
   if (error) return { points: [], warnings, error };
 
   const points: RawDesignPoint[] = rows.map((r) => ({

@@ -16,9 +16,8 @@ interface Props {
 
 /** Human-readable labels for each supported unit system. */
 const UNIT_OPTIONS: { value: UnitSystem; label: string }[] = [
-  { value: "decimal-feet", label: "Decimal Feet (Engineer Scale)" },
-  { value: "inches", label: "Inches" },
-  { value: "metric", label: "Metric (Meters)" },
+  { value: "feet",   label: "Feet (decimal)" },
+  { value: "meters", label: "Meters (decimal)" },
 ];
 
 /** Shared Tailwind classes for form inputs. */
@@ -40,9 +39,7 @@ export default function ReportInfoForm({ reportInfo, onChange }: Props) {
     onChange({ ...reportInfo, [field]: isNaN(num) ? 0 : num });
   }
 
-  const unitLabel =
-    reportInfo.unitSystem === "metric" ? "m" :
-    reportInfo.unitSystem === "inches" ? "in" : "ft";
+  const unitLabel = reportInfo.unitSystem === "meters" ? "m" : "ft";
 
   return (
     <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
@@ -95,19 +92,7 @@ export default function ReportInfoForm({ reportInfo, onChange }: Props) {
         </div>
       </div>
 
-      {/* Row 3: Project Description (full width) */}
-      <div className="mt-4">
-        <label className={labelClass}>Project Description</label>
-        <input
-          type="text"
-          className={inputClass}
-          placeholder="Brief description of the project or area"
-          value={reportInfo.projectDescription}
-          onChange={(e) => handleText("projectDescription", e.target.value)}
-        />
-      </div>
-
-      {/* Row 4: Unit System + Design Thickness */}
+      {/* Row 3: Unit System + Design Thickness */}
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         <div>
           <label className={labelClass}>Unit System / Elevation Units</label>
@@ -140,6 +125,24 @@ export default function ReportInfoForm({ reportInfo, onChange }: Props) {
             onChange={(e) => handleNumber("designThickness", e.target.value)}
           />
         </div>
+      </div>
+
+      {/* Row 4: Project Description (full width, multi-line) */}
+      <div className="mt-4">
+        <label className={labelClass}>
+          Project Description
+          <span className="ml-2 font-normal text-gray-400">
+            ({reportInfo.projectDescription.length} / 250)
+          </span>
+        </label>
+        <textarea
+          className={`${inputClass} min-h-[80px] resize-y`}
+          rows={3}
+          maxLength={250}
+          placeholder="Brief description of the project or area"
+          value={reportInfo.projectDescription}
+          onChange={(e) => handleText("projectDescription", e.target.value)}
+        />
       </div>
 
     </section>

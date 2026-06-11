@@ -2,8 +2,8 @@
 // stabSheet.ts – shared TypeScript types for the Stab Sheet Report Generator
 // ---------------------------------------------------------------------------
 
-/** Units supported for elevation / thickness entry. */
-export type UnitSystem = "decimal-feet" | "inches" | "metric";
+/** Units supported for elevation / thickness entry. Decimal only — no feet-and-inches. */
+export type UnitSystem = "feet" | "meters";
 
 /** Report header information filled out by the user. */
 export interface ReportInfo {

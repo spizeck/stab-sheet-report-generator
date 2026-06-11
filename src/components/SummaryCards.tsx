@@ -3,8 +3,7 @@
 // ---------------------------------------------------------------------------
 // SummaryCards.tsx
 //
-// Displays six summary stat cards: matched, cut, fill, on-grade,
-// unmatched as-built, unmatched design.
+// Displays three summary stat cards: cut, fill, and on-grade.
 // ---------------------------------------------------------------------------
 
 import type { ReportSummary } from "@/src/types/stabSheet";
@@ -23,12 +22,6 @@ interface CardConfig {
 export default function SummaryCards({ summary }: Props) {
   const cards: CardConfig[] = [
     {
-      label: "Matched Points",
-      value: summary.matchedCount,
-      colorClass: "bg-blue-50 border-blue-200 text-blue-800",
-      dotClass: "bg-blue-400",
-    },
-    {
       label: "Cut",
       value: summary.cutCount,
       colorClass: "bg-red-50 border-red-200 text-red-800",
@@ -46,22 +39,10 @@ export default function SummaryCards({ summary }: Props) {
       colorClass: "bg-gray-50 border-gray-200 text-gray-700",
       dotClass: "bg-gray-400",
     },
-    {
-      label: "Unmatched As-Built",
-      value: summary.unmatchedAsBuiltCount,
-      colorClass: "bg-orange-50 border-orange-200 text-orange-800",
-      dotClass: "bg-orange-400",
-    },
-    {
-      label: "Unmatched Design",
-      value: summary.unmatchedDesignCount,
-      colorClass: "bg-purple-50 border-purple-200 text-purple-800",
-      dotClass: "bg-purple-400",
-    },
   ];
 
   return (
-    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+    <div className="grid grid-cols-3 gap-4">
       {cards.map((card) => (
         <div
           key={card.label}
