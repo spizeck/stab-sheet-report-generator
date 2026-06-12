@@ -71,6 +71,12 @@ const DEFAULT_REPORT_INFO: ReportInfo = {
   projectDescription: "",
   designThickness: 0,
   unitSystem: "feet",
+  tolerance: {
+    cutTolerance: 0.020,
+    fillTolerance: 0.040,
+    cutHighlightColor: "#ffcccc",
+    fillHighlightColor: "#fff4cc",
+  },
 };
 
 const EMPTY_MATCH_RESULT: MatchResult = {
@@ -111,15 +117,20 @@ export default function StabSheetPage() {
   // The calculated match result
   const [matchResult, setMatchResult] = useState<MatchResult>(EMPTY_MATCH_RESULT);
 
-  // Re-run matching whenever either point set or design thickness changes
+  // Re-run matching whenever either point set, design thickness, or tolerance changes
   useEffect(() => {
     if (asBuiltPoints.length === 0 || designPoints.length === 0) {
       setMatchResult(EMPTY_MATCH_RESULT);
       return;
     }
-    const result = matchAndCalculate(asBuiltPoints, designPoints, reportInfo.designThickness);
+    const result = matchAndCalculate(
+      asBuiltPoints,
+      designPoints,
+      reportInfo.designThickness,
+      reportInfo.tolerance
+    );
     setMatchResult(result);
-  }, [asBuiltPoints, designPoints, reportInfo.designThickness]);
+  }, [asBuiltPoints, designPoints, reportInfo.designThickness, reportInfo.tolerance]);
 
   // ── Shared parse helpers ────────────────────────────────────────────────
 
@@ -171,7 +182,7 @@ export default function StabSheetPage() {
 
   // ── Derived state ───────────────────────────────────────────────────────
 
-  const summary    = buildSummary(matchResult);
+  const summary = buildSummary(matchResult);
   const hasResults =
     matchResult.matched.length > 0 ||
     matchResult.unmatchedAsBuilt.length > 0 ||
@@ -205,7 +216,7 @@ export default function StabSheetPage() {
                 Stab Sheet Report Generator
               </h1>
               <p className="text-xs text-blue-200">
-                Survey Analysis Tool
+                As-Built Survey Analysis Tool
               </p>
             </div>
           </div>
@@ -286,7 +297,9 @@ export default function StabSheetPage() {
             </div>
             <div className="flex justify-end">
               <button
-                onClick={() => exportPdf(reportInfo, matchResult, summary)}
+                onClick={() =>
+                  exportPdf(reportInfo, matchResult, summary)
+                }
                 className="inline-flex items-center gap-2 rounded-lg bg-blue-700 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-800 active:scale-95 transition-all"
               >
                 {/* Download icon */}
@@ -304,6 +317,7 @@ export default function StabSheetPage() {
           <ResultsTable
             result={matchResult}
             designThickness={reportInfo.designThickness}
+            tolerance={reportInfo.tolerance}
           />
         )}
 

@@ -12,12 +12,13 @@
 // The tables scroll horizontally on small screens.
 // ---------------------------------------------------------------------------
 
-import type { MatchResult, RawAsBuiltPoint, RawDesignPoint } from "@/src/types/stabSheet";
-import { round3 } from "@/src/lib/stabSheetCalculations";
+import type { MatchResult, RawAsBuiltPoint, RawDesignPoint, ToleranceConfig } from "@/src/types/stabSheet";
+import { round3, formatSignedVariance } from "@/src/lib/stabSheetCalculations";
 
 interface Props {
   result: MatchResult;
   designThickness: number;
+  tolerance?: ToleranceConfig;
 }
 
 // ---------------------------------------------------------------------------
@@ -36,8 +37,41 @@ function statusBadge(status: "Cut" | "Fill" | "On Grade") {
   return `${base} bg-gray-100 text-gray-600`;
 }
 
-function rowBg(idx: number) {
-  return idx % 2 === 0 ? "bg-white" : "bg-gray-50/50";
+/** Determine row background class based on index (for unmatched tables). */
+function rowBg(idx: number): string;
+/** Determine row background based on index, status, and tolerance highlighting. */
+function rowBg(
+  idx: number,
+  status: "Cut" | "Fill" | "On Grade",
+  tolerance?: ToleranceConfig
+): string;
+function rowBg(
+  idx: number,
+  status?: "Cut" | "Fill" | "On Grade",
+  tolerance?: ToleranceConfig
+): string {
+  const baseBg = idx % 2 === 0 ? "bg-white" : "bg-gray-50/50";
+
+  // If no status provided (unmatched tables), just return base background
+  if (!status) {
+    return baseBg;
+  }
+
+  return baseBg;
+}
+
+/** Get inline background style for tolerance highlighting. */
+function getHighlightStyle(
+  status: "Cut" | "Fill" | "On Grade",
+  tolerance?: ToleranceConfig
+): React.CSSProperties {
+  if (status === "Cut" && tolerance) {
+    return { backgroundColor: tolerance.cutHighlightColor };
+  }
+  if (status === "Fill" && tolerance) {
+    return { backgroundColor: tolerance.fillHighlightColor };
+  }
+  return {};
 }
 
 // ---------------------------------------------------------------------------
@@ -126,7 +160,7 @@ function UnmatchedDesignTable({ points }: { points: RawDesignPoint[] }) {
 // Main component
 // ---------------------------------------------------------------------------
 
-export default function ResultsTable({ result, designThickness }: Props) {
+export default function ResultsTable({ result, designThickness, tolerance }: Props) {
   if (result.matched.length === 0 && result.unmatchedAsBuilt.length === 0 && result.unmatchedDesign.length === 0) {
     return null;
   }
@@ -159,12 +193,16 @@ export default function ResultsTable({ result, designThickness }: Props) {
                   <th className={th}>Design Thickness</th>
                   <th className={th}>Adj. Design Elev.</th>
                   <th className={th}>Status</th>
-                  <th className={th}>Amount</th>
+                  <th className={th}>Variance</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50 bg-white">
                 {result.matched.map((pt, idx) => (
-                  <tr key={`${pt.pointId}-${idx}`} className={rowBg(idx)}>
+                  <tr
+                    key={`${pt.pointId}-${idx}`}
+                    className={rowBg(idx, pt.status, tolerance)}
+                    style={getHighlightStyle(pt.status, tolerance)}
+                  >
                     <td className={`${td} font-medium text-gray-900`}>{pt.pointId}</td>
                     <td className={tdMono}>{round3(pt.northing)}</td>
                     <td className={tdMono}>{round3(pt.easting)}</td>
@@ -175,12 +213,12 @@ export default function ResultsTable({ result, designThickness }: Props) {
                     <td className={td}>
                       <span className={statusBadge(pt.status)}>{pt.status}</span>
                     </td>
-                    {/* Amount column: coloured by status, always positive */}
+                    {/* Variance column: always show signed value with 3 decimals */}
                     <td className={`${tdMono} font-semibold ${
                       pt.status === "Cut"  ? "text-red-700" :
                       pt.status === "Fill" ? "text-green-700" : "text-gray-500"
                     }`}>
-                      {pt.status === "On Grade" ? "—" : round3(pt.absDifference)}
+                      {formatSignedVariance(pt.variance)}
                     </td>
                   </tr>
                 ))}

@@ -15,7 +15,7 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import type { ReportInfo, MatchResult, ReportSummary } from "@/src/types/stabSheet";
-import { round3 } from "@/src/lib/stabSheetCalculations";
+import { round3, formatSignedVariance } from "@/src/lib/stabSheetCalculations";
 
 // ---------------------------------------------------------------------------
 // Colour palette (R, G, B)
@@ -29,6 +29,10 @@ const COLOR_FILL:        [number, number, number] = [21,  128,  61]; // green-70
 const COLOR_ON_GRADE:    [number, number, number] = [100, 116, 139]; // slate-500
 const COLOR_UNMATCHED_AB:[number, number, number] = [194,  65,  12]; // orange-700
 const COLOR_UNMATCHED_D: [number, number, number] = [109,  40, 217]; // violet-700
+
+// Tolerance highlight colors (light background tints)
+const COLOR_CUT_HIGHLIGHT:  [number, number, number] = [255, 204, 204]; // light red
+const COLOR_FILL_HIGHLIGHT: [number, number, number] = [255, 244, 204]; // light yellow
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -103,8 +107,8 @@ export function exportPdf(
   const lineH = 5.5;
 
   // Calculate description height first to determine block height
-  // Description text starts at col2x + 28 and must end before col3x with padding
-  const descWidth = col3x - col2x - 32; // 28 for label offset + 4 padding
+  // Description text starts at col3x + 28 and must fit in column 3
+  const descWidth = pageW - col3x - margin - 32; // 28 for label offset + 4 padding
   const descText = reportInfo.projectDescription || "—";
   doc.setFontSize(8);
   doc.setFont("helvetica", "normal");
@@ -150,15 +154,9 @@ export function exportPdf(
   iy += lineH;
   infoRow(col2x, "Design Thick.:", `${round3(reportInfo.designThickness)} ${ul}`);
   iy += lineH;
-
-  // Description label
-  doc.setFont("helvetica", "bold");
-  doc.setTextColor(100, 116, 139);
-  doc.text("Description:", col2x, iy);
-  // Description value - multi-line wrapped text (confined to column 2 area)
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(17, 24, 39);
-  doc.text(descLines, col2x + 28, iy, { maxWidth: descWidth });
+  infoRow(col2x, "Cut Tol.:", `${round3(reportInfo.tolerance.cutTolerance)} ${ul}`);
+  iy += lineH;
+  infoRow(col2x, "Fill Tol.:", `${round3(reportInfo.tolerance.fillTolerance)} ${ul}`);
 
   iy = cursorY + 6;
   // Summary stats in col 3 – Cut, Fill, On Grade only
@@ -177,6 +175,15 @@ export function exportPdf(
     iy += lineH - 0.5;
   }
 
+  // Description label (under On Grade in column 3)
+  doc.setFont("helvetica", "bold");
+  doc.setTextColor(100, 116, 139);
+  doc.text("Description:", col3x, iy);
+  // Description value - multi-line wrapped text (in column 3 area)
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(17, 24, 39);
+  doc.text(descLines, col3x + 30, iy, { maxWidth: descWidth });
+
   cursorY += blockHeight + 4;
 
   // ── 3. Matched results table ─────────────────────────────────────────────
@@ -191,7 +198,7 @@ export function exportPdf(
       round3(reportInfo.designThickness),
       round3(pt.adjustedDesignElevation),
       pt.status,
-      pt.status === "On Grade" ? "—" : round3(pt.absDifference),
+      formatSignedVariance(pt.variance),
     ]);
 
     autoTable(doc, {
@@ -201,7 +208,7 @@ export function exportPdf(
         "Point ID", "Northing", "Easting",
         `As-Built Elev (${ul})`, `Design Elev (${ul})`,
         `Design Thick (${ul})`, `Adj. Design Elev (${ul})`,
-        "Status", "Cut/Fill Amount",
+        "Status", "Variance",
       ]],
       body: matchedRows,
       styles: {
@@ -218,13 +225,26 @@ export function exportPdf(
       },
       alternateRowStyles: { fillColor: [248, 250, 252] },
       // Colour the Status and Cut/Fill Amount cells by cut/fill result
+      // Add background highlight for tolerance-based Cut/Fill statuses
       didParseCell(data) {
-        if (data.section === "body" && (data.column.index === 7 || data.column.index === 8)) {
-          const status = result.matched[data.row.index]?.status;
-          if (status === "Cut")       data.cell.styles.textColor = COLOR_CUT;
-          else if (status === "Fill") data.cell.styles.textColor = COLOR_FILL;
-          else                        data.cell.styles.textColor = COLOR_ON_GRADE;
-          data.cell.styles.fontStyle = "bold";
+        if (data.section === "body") {
+          const pt = result.matched[data.row.index];
+          const status = pt?.status;
+
+          // Column 7 = Status, Column 8 = Cut/Fill Amount
+          if (data.column.index === 7 || data.column.index === 8) {
+            if (status === "Cut")       data.cell.styles.textColor = COLOR_CUT;
+            else if (status === "Fill") data.cell.styles.textColor = COLOR_FILL;
+            else                        data.cell.styles.textColor = COLOR_ON_GRADE;
+            data.cell.styles.fontStyle = "bold";
+          }
+
+          // Apply row background highlighting for Cut/Fill (tolerance-based)
+          if (status === "Cut") {
+            data.cell.styles.fillColor = COLOR_CUT_HIGHLIGHT;
+          } else if (status === "Fill") {
+            data.cell.styles.fillColor = COLOR_FILL_HIGHLIGHT;
+          }
         }
       },
       didDrawPage() {

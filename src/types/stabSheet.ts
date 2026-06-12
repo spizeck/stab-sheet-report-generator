@@ -5,6 +5,18 @@
 /** Units supported for elevation / thickness entry. Decimal only — no feet-and-inches. */
 export type UnitSystem = "feet" | "meters";
 
+/** Tolerance configuration for cut/fill highlighting. */
+export interface ToleranceConfig {
+  /** Cut tolerance - cuts below this threshold show as On Grade */
+  cutTolerance: number;
+  /** Fill tolerance - fills below this threshold show as On Grade */
+  fillTolerance: number;
+  /** CSS color for cut highlight (e.g., "#ffcccc") */
+  cutHighlightColor: string;
+  /** CSS color for fill highlight (e.g., "#fff4cc") */
+  fillHighlightColor: string;
+}
+
 /** Report header information filled out by the user. */
 export interface ReportInfo {
   stabSheetName: string;
@@ -15,6 +27,8 @@ export interface ReportInfo {
   /** Design thickness expressed in the selected unit system. */
   designThickness: number;
   unitSystem: UnitSystem;
+  /** Tolerance settings for cut/fill classification */
+  tolerance: ToleranceConfig;
 }
 
 // ---------------------------------------------------------------------------
@@ -64,12 +78,22 @@ export interface CalculatedPoint {
   designElevation: number;
   /** designElevation - designThickness */
   adjustedDesignElevation: number;
-  /** asBuiltElevation - adjustedDesignElevation */
-  difference: number;
-  /** Cut if difference > 0, Fill if difference < 0, On Grade if 0 */
+  /**
+   * Variance = adjustedDesignElevation - asBuiltElevation
+   * Negative = Cut (point is high, material must be removed)
+   * Positive = Fill (point is low, material must be added)
+   * Zero = On Grade (exact match)
+   */
+  variance: number;
+  /**
+   * Status determined by variance sign and tolerance:
+   * Cut: variance < 0 and abs(variance) >= cutTolerance
+   * Fill: variance > 0 and abs(variance) >= fillTolerance
+   * On Grade: abs(variance) < applicable tolerance
+   */
   status: CutFillStatus;
-  /** Math.abs(difference) – used for the Amount display column */
-  absDifference: number;
+  /** Absolute value of variance (|variance|) */
+  absVariance: number;
 }
 
 // ---------------------------------------------------------------------------

@@ -83,7 +83,7 @@ describe('matchAndCalculate - Cut/Fill/On Grade Logic', () => {
 
   it('should calculate CUT when as-built is above adjusted design', () => {
     // Design: 100.0, Thickness: 0.5 → Adjusted: 99.5
-    // As-Built: 100.2 → Difference: +0.7 = CUT
+    // As-Built: 100.2 (high by 0.7) → Variance: -0.7 = CUT
     const asBuilt = [makeAsBuilt('P1', 1000.0, 2000.0, 100.2)]
     const design = [makeDesign('D1', 1000.0, 2000.0, 100.0)]
 
@@ -91,13 +91,13 @@ describe('matchAndCalculate - Cut/Fill/On Grade Logic', () => {
 
     expect(result.matched).toHaveLength(1)
     expect(result.matched[0].status).toBe('Cut')
-    expect(result.matched[0].difference).toBeCloseTo(0.7, 3)
-    expect(result.matched[0].absDifference).toBeCloseTo(0.7, 3)
+    expect(result.matched[0].variance).toBeCloseTo(-0.7, 3)
+    expect(result.matched[0].absVariance).toBeCloseTo(0.7, 3)
   })
 
   it('should calculate FILL when as-built is below adjusted design', () => {
     // Design: 100.0, Thickness: 0.5 → Adjusted: 99.5
-    // As-Built: 99.0 → Difference: -0.5 = FILL
+    // As-Built: 99.0 (low by 0.5) → Variance: +0.5 = FILL
     const asBuilt = [makeAsBuilt('P1', 1000.0, 2000.0, 99.0)]
     const design = [makeDesign('D1', 1000.0, 2000.0, 100.0)]
 
@@ -105,13 +105,13 @@ describe('matchAndCalculate - Cut/Fill/On Grade Logic', () => {
 
     expect(result.matched).toHaveLength(1)
     expect(result.matched[0].status).toBe('Fill')
-    expect(result.matched[0].difference).toBeCloseTo(-0.5, 3)
-    expect(result.matched[0].absDifference).toBeCloseTo(0.5, 3)
+    expect(result.matched[0].variance).toBeCloseTo(0.5, 3)
+    expect(result.matched[0].absVariance).toBeCloseTo(0.5, 3)
   })
 
   it('should calculate ON GRADE when as-built equals adjusted design', () => {
     // Design: 100.0, Thickness: 0.5 → Adjusted: 99.5
-    // As-Built: 99.5 → Difference: 0.0 = On Grade
+    // As-Built: 99.5 → Variance: 0.0 = On Grade
     const asBuilt = [makeAsBuilt('P1', 1000.0, 2000.0, 99.5)]
     const design = [makeDesign('D1', 1000.0, 2000.0, 100.0)]
 
@@ -119,30 +119,30 @@ describe('matchAndCalculate - Cut/Fill/On Grade Logic', () => {
 
     expect(result.matched).toHaveLength(1)
     expect(result.matched[0].status).toBe('On Grade')
-    expect(result.matched[0].difference).toBe(0)
-    expect(result.matched[0].absDifference).toBe(0)
+    expect(result.matched[0].variance).toBe(0)
+    expect(result.matched[0].absVariance).toBe(0)
   })
 
   it('should handle very small positive differences as Cut', () => {
-    // Tiny elevation difference should still be Cut
+    // As-Built slightly above adjusted design: high by 0.0001 → variance -0.0001 = Cut
     const asBuilt = [makeAsBuilt('P1', 1000.0, 2000.0, 99.5001)]
     const design = [makeDesign('D1', 1000.0, 2000.0, 100.0)]
 
     const result = matchAndCalculate(asBuilt, design, designThickness)
 
     expect(result.matched[0].status).toBe('Cut')
-    expect(result.matched[0].difference).toBeCloseTo(0.0001, 4)
+    expect(result.matched[0].variance).toBeCloseTo(-0.0001, 4)
   })
 
   it('should handle very small negative differences as Fill', () => {
-    // Tiny elevation difference should still be Fill
+    // As-Built slightly below adjusted design: low by 0.0001 → variance +0.0001 = Fill
     const asBuilt = [makeAsBuilt('P1', 1000.0, 2000.0, 99.4999)]
     const design = [makeDesign('D1', 1000.0, 2000.0, 100.0)]
 
     const result = matchAndCalculate(asBuilt, design, designThickness)
 
     expect(result.matched[0].status).toBe('Fill')
-    expect(result.matched[0].difference).toBeCloseTo(-0.0001, 4)
+    expect(result.matched[0].variance).toBeCloseTo(0.0001, 4)
   })
 })
 

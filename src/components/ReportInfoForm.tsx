@@ -7,7 +7,7 @@
 // and the design thickness / unit system used for all calculations.
 // ---------------------------------------------------------------------------
 
-import type { ReportInfo, UnitSystem } from "@/src/types/stabSheet";
+import type { ReportInfo, UnitSystem, ToleranceConfig } from "@/src/types/stabSheet";
 
 interface Props {
   reportInfo: ReportInfo;
@@ -18,6 +18,24 @@ interface Props {
 const UNIT_OPTIONS: { value: UnitSystem; label: string }[] = [
   { value: "feet",   label: "Feet (decimal)" },
   { value: "meters", label: "Meters (decimal)" },
+];
+
+/** Tolerance value options in decimal units */
+const TOLERANCE_OPTIONS: number[] = [0, 0.010, 0.020, 0.030, 0.040, 0.050, 0.060, 0.080, 0.100];
+
+/** Preset highlight colors for cut (reds) and fill (yellows/oranges) */
+const CUT_HIGHLIGHT_COLORS = [
+  { value: "#ffcccc", label: "Light Red" },
+  { value: "#ffaaaa", label: "Medium Red" },
+  { value: "#ff9999", label: "Strong Red" },
+  { value: "#ffe0e0", label: "Pale Red" },
+];
+
+const FILL_HIGHLIGHT_COLORS = [
+  { value: "#fff4cc", label: "Light Yellow" },
+  { value: "#ffe4b3", label: "Light Orange" },
+  { value: "#fff8dc", label: "Cornsilk" },
+  { value: "#ffe7ba", label: "Pale Orange" },
 ];
 
 /** Shared Tailwind classes for form inputs. */
@@ -39,7 +57,20 @@ export default function ReportInfoForm({ reportInfo, onChange }: Props) {
     onChange({ ...reportInfo, [field]: isNaN(num) ? 0 : num });
   }
 
+  /** Tolerance field updater. */
+  function handleTolerance(field: keyof ToleranceConfig, value: number | string) {
+    onChange({
+      ...reportInfo,
+      tolerance: { ...reportInfo.tolerance, [field]: value },
+    });
+  }
+
   const unitLabel = reportInfo.unitSystem === "meters" ? "m" : "ft";
+
+  /** Format tolerance value for display */
+  function formatTolerance(value: number): string {
+    return value.toFixed(3);
+  }
 
   return (
     <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
@@ -127,18 +158,99 @@ export default function ReportInfoForm({ reportInfo, onChange }: Props) {
         </div>
       </div>
 
-      {/* Row 4: Project Description (full width, multi-line) */}
+      {/* Row 4: Cut/Fill Tolerance Settings */}
+      <div className="mt-6 border-t border-gray-200 pt-5">
+        <h3 className="mb-4 text-sm font-semibold text-gray-700">
+          Cut/Fill Tolerances ({unitLabel})
+        </h3>
+        <p className="mb-4 text-xs text-gray-500">
+          Points with cut or fill amounts below tolerance will be classified as "On Grade".
+          Values equal to or greater than tolerance will be highlighted.
+        </p>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          {/* Cut Tolerance */}
+          <div className="flex gap-3">
+            <div className="flex-1">
+              <label className={labelClass}>Cut Tolerance</label>
+              <select
+                className={inputClass}
+                value={reportInfo.tolerance.cutTolerance}
+                onChange={(e) =>
+                  handleTolerance("cutTolerance", parseFloat(e.target.value))
+                }
+              >
+                {TOLERANCE_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {formatTolerance(opt)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="w-20">
+              <label className={labelClass}>Color</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  className="h-9 w-14 cursor-pointer rounded border border-gray-300"
+                  value={reportInfo.tolerance.cutHighlightColor}
+                  onChange={(e) =>
+                    handleTolerance("cutHighlightColor", e.target.value)
+                  }
+                  title="Cut highlight color"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Fill Tolerance */}
+          <div className="flex gap-3">
+            <div className="flex-1">
+              <label className={labelClass}>Fill Tolerance</label>
+              <select
+                className={inputClass}
+                value={reportInfo.tolerance.fillTolerance}
+                onChange={(e) =>
+                  handleTolerance("fillTolerance", parseFloat(e.target.value))
+                }
+              >
+                {TOLERANCE_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {formatTolerance(opt)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="w-20">
+              <label className={labelClass}>Color</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  className="h-9 w-14 cursor-pointer rounded border border-gray-300"
+                  value={reportInfo.tolerance.fillHighlightColor}
+                  onChange={(e) =>
+                    handleTolerance("fillHighlightColor", e.target.value)
+                  }
+                  title="Fill highlight color"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Row 5: Project Description (full width, multi-line) */}
       <div className="mt-4">
         <label className={labelClass}>
           Project Description
           <span className="ml-2 font-normal text-gray-400">
-            ({reportInfo.projectDescription.length} / 250)
+            ({reportInfo.projectDescription.length} / 75)
           </span>
         </label>
         <textarea
           className={`${inputClass} min-h-[80px] resize-y`}
           rows={3}
-          maxLength={250}
+          maxLength={75}
           placeholder="Brief description of the project or area"
           value={reportInfo.projectDescription}
           onChange={(e) => handleText("projectDescription", e.target.value)}
