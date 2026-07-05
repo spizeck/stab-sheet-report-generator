@@ -12,13 +12,24 @@
 // The tables scroll horizontally on small screens.
 // ---------------------------------------------------------------------------
 
-import type { MatchResult, RawAsBuiltPoint, RawDesignPoint, ToleranceConfig } from "@/src/types/stabSheet";
+import type {
+  MatchResult,
+  RawAsBuiltPoint,
+  RawDesignPoint,
+  ToleranceConfig,
+  CalculatedPoint,
+  StationOffsetResult,
+} from "@/src/types/stabSheet";
 import { round3, formatSignedVariance } from "@/src/lib/stabSheetCalculations";
+
+type PointWithSO = CalculatedPoint & { stationOffset: StationOffsetResult };
 
 interface Props {
   result: MatchResult;
   designThickness: number;
   tolerance?: ToleranceConfig;
+  /** When provided, station/offset columns are shown and rows sorted by station. */
+  matchedWithSO?: PointWithSO[] | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -160,10 +171,26 @@ function UnmatchedDesignTable({ points }: { points: RawDesignPoint[] }) {
 // Main component
 // ---------------------------------------------------------------------------
 
-export default function ResultsTable({ result, designThickness, tolerance }: Props) {
+export default function ResultsTable({ result, designThickness, tolerance, matchedWithSO }: Props) {
   if (result.matched.length === 0 && result.unmatchedAsBuilt.length === 0 && result.unmatchedDesign.length === 0) {
     return null;
   }
+
+  const hasSO = matchedWithSO != null && matchedWithSO.length > 0;
+
+  // When station/offset is available, sort by station ascending then offset ascending
+  const displayRows: PointWithSO[] | typeof result.matched = hasSO
+    ? [...matchedWithSO].sort((a, b) => {
+        const staDiff = a.stationOffset.station - b.stationOffset.station;
+        if (Math.abs(staDiff) > 1e-9) return staDiff;
+        return a.stationOffset.offset - b.stationOffset.offset;
+      })
+    : result.matched;
+
+  // Collect rows that have a non-OK warning for the footnote table
+  const warningRows = hasSO
+    ? (displayRows as PointWithSO[]).filter((pt) => pt.stationOffset.warning !== "OK")
+    : [];
 
   return (
     <div className="space-y-4">
@@ -178,6 +205,7 @@ export default function ResultsTable({ result, designThickness, tolerance }: Pro
               Design thickness applied:{" "}
               <span className="font-medium">{round3(designThickness)}</span>
               &nbsp;·&nbsp; Points matched by coordinate (±0.001)
+              {hasSO && <>&nbsp;·&nbsp; Sorted by station</>}
             </p>
           </div>
 
@@ -186,40 +214,85 @@ export default function ResultsTable({ result, designThickness, tolerance }: Pro
               <thead className="bg-gray-50">
                 <tr>
                   <th className={th}>Point ID</th>
-                  <th className={th}>Northing</th>
-                  <th className={th}>Easting</th>
+                  {hasSO && <th className={th}>Station</th>}
+                  {hasSO && <th className={th}>Offset</th>}
+                  {!hasSO && <th className={th}>Northing</th>}
+                  {!hasSO && <th className={th}>Easting</th>}
                   <th className={th}>As-Built Elev.</th>
                   <th className={th}>Design Elev.</th>
-                  <th className={th}>Design Thickness</th>
-                  <th className={th}>Adj. Design Elev.</th>
+                  {!hasSO && <th className={th}>Design Thickness</th>}
+                  {!hasSO && <th className={th}>Adj. Design Elev.</th>}
                   <th className={th}>Status</th>
                   <th className={th}>Variance</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50 bg-white">
-                {result.matched.map((pt, idx) => (
+                {(displayRows as (CalculatedPoint & { stationOffset?: StationOffsetResult })[]).map((pt, idx) => (
                   <tr
                     key={`${pt.pointId}-${idx}`}
                     className={rowBg(idx, pt.status, tolerance)}
                     style={getHighlightStyle(pt.status, tolerance)}
                   >
                     <td className={`${td} font-medium text-gray-900`}>{pt.pointId}</td>
-                    <td className={tdMono}>{round3(pt.northing)}</td>
-                    <td className={tdMono}>{round3(pt.easting)}</td>
+                    {hasSO && pt.stationOffset && (
+                      <td className={tdMono}>{pt.stationOffset.stationFormatted}</td>
+                    )}
+                    {hasSO && pt.stationOffset && (
+                      <td className={`${tdMono} ${pt.stationOffset.warning !== "OK" ? "text-amber-600" : ""}`}>
+                        {pt.stationOffset.offsetFormatted}
+                        {pt.stationOffset.warning !== "OK" && (
+                          <span className="ml-1 text-xs text-amber-500">⚠</span>
+                        )}
+                      </td>
+                    )}
+                    {!hasSO && <td className={tdMono}>{round3(pt.northing)}</td>}
+                    {!hasSO && <td className={tdMono}>{round3(pt.easting)}</td>}
                     <td className={tdMono}>{round3(pt.asBuiltElevation)}</td>
                     <td className={tdMono}>{round3(pt.designElevation)}</td>
-                    <td className={tdMono}>{round3(designThickness)}</td>
-                    <td className={tdMono}>{round3(pt.adjustedDesignElevation)}</td>
+                    {!hasSO && <td className={tdMono}>{round3(designThickness)}</td>}
+                    {!hasSO && <td className={tdMono}>{round3(pt.adjustedDesignElevation)}</td>}
                     <td className={td}>
                       <span className={statusBadge(pt.status)}>{pt.status}</span>
                     </td>
-                    {/* Variance column: always show signed value with 3 decimals */}
                     <td className={`${tdMono} font-semibold ${
                       pt.status === "Cut"  ? "text-red-700" :
                       pt.status === "Fill" ? "text-green-700" : "text-gray-500"
                     }`}>
                       {formatSignedVariance(pt.variance)}
                     </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {/* ── Station/offset warnings footnote ── */}
+      {warningRows.length > 0 && (
+        <section className="rounded-xl border border-amber-200 bg-amber-50 shadow-sm overflow-hidden">
+          <div className="px-6 py-3 border-b border-amber-100">
+            <h3 className="text-sm font-bold text-amber-800">
+              Station/Offset Calculation Warnings ({warningRows.length})
+            </h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-amber-100">
+              <thead className="bg-amber-50">
+                <tr>
+                  <th className={th}>Point ID</th>
+                  <th className={th}>Station</th>
+                  <th className={th}>Offset</th>
+                  <th className={th}>Warning</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-amber-50 bg-white">
+                {warningRows.map((pt, idx) => (
+                  <tr key={`warn-${idx}`} className={rowBg(idx)}>
+                    <td className={`${td} font-medium`}>{pt.pointId}</td>
+                    <td className={tdMono}>{pt.stationOffset.stationFormatted}</td>
+                    <td className={tdMono}>{pt.stationOffset.offsetFormatted}</td>
+                    <td className={`${td} text-amber-700 text-xs font-mono`}>{pt.stationOffset.warning}</td>
                   </tr>
                 ))}
               </tbody>

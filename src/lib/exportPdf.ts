@@ -14,8 +14,18 @@
 
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import type { ReportInfo, MatchResult, ReportSummary } from "@/src/types/stabSheet";
+import type {
+  ReportInfo,
+  MatchResult,
+  ReportSummary,
+  CalculatedPoint,
+  StationOffsetResult,
+  ParsedAlignment,
+} from "@/src/types/stabSheet";
 import { round3, formatSignedVariance } from "@/src/lib/stabSheetCalculations";
+import { formatStation } from "@/src/lib/stationOffset";
+
+type PointWithSO = CalculatedPoint & { stationOffset: StationOffsetResult };
 
 // ---------------------------------------------------------------------------
 // Colour palette (R, G, B)
@@ -66,14 +76,18 @@ function displayUnitSystem(unitSystem: string): string {
 /**
  * Builds and triggers a browser download of the stab-sheet PDF.
  *
- * @param reportInfo - Header data from the form
- * @param result     - Matched + unmatched point sets
- * @param summary    - Pre-computed aggregate counts
+ * @param reportInfo    - Header data from the form
+ * @param result        - Matched + unmatched point sets
+ * @param summary       - Pre-computed aggregate counts
+ * @param matchedWithSO - Optional matched points annotated with station/offset
+ * @param alignment     - Optional parsed alignment (used for the header note)
  */
 export function exportPdf(
   reportInfo: ReportInfo,
   result: MatchResult,
-  summary: ReportSummary
+  summary: ReportSummary,
+  matchedWithSO?: PointWithSO[] | null,
+  alignment?: ParsedAlignment | null
 ): void {
   const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "letter" });
   const pageW = doc.internal.pageSize.getWidth();
@@ -186,30 +200,75 @@ export function exportPdf(
 
   cursorY += blockHeight + 4;
 
+  // ── 2b. Alignment note (if XML was uploaded) ────────────────────────────
+  if (alignment) {
+    doc.setFillColor(204, 251, 241); // teal-100
+    doc.rect(margin, cursorY, pageW - margin * 2, 8, "F");
+    doc.setFontSize(7.5);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(13, 148, 136); // teal-600
+    const staNote = `Station/offset calculated from uploaded centerline: ${alignment.name}`
+      + `  ·  Start station: ${formatStation(alignment.staStart)}`;
+    doc.text(staNote, margin + 3, cursorY + 5.2);
+    cursorY += 12;
+  }
+
   // ── 3. Matched results table ─────────────────────────────────────────────
   if (result.matched.length > 0) {
+    const hasSO = matchedWithSO != null && matchedWithSO.length > 0;
 
-    const matchedRows = result.matched.map((pt) => [
-      pt.pointId,
-      round3(pt.northing),
-      round3(pt.easting),
-      round3(pt.asBuiltElevation),
-      round3(pt.designElevation),
-      round3(reportInfo.designThickness),
-      round3(pt.adjustedDesignElevation),
-      pt.status,
-      formatSignedVariance(pt.variance),
-    ]);
+    // Sort by station when SO is available
+    const displayRows: PointWithSO[] | typeof result.matched = hasSO
+      ? [...matchedWithSO].sort((a, b) => {
+          const d = a.stationOffset.station - b.stationOffset.station;
+          if (Math.abs(d) > 1e-9) return d;
+          return a.stationOffset.offset - b.stationOffset.offset;
+        })
+      : result.matched;
+
+    const matchedRows = (displayRows as (typeof result.matched[0] & { stationOffset?: StationOffsetResult })[])
+      .map((pt) => {
+        if (hasSO && pt.stationOffset) {
+          return [
+            pt.pointId,
+            pt.stationOffset.stationFormatted,
+            pt.stationOffset.offsetFormatted,
+            round3(pt.asBuiltElevation),
+            round3(pt.designElevation),
+            pt.status,
+            formatSignedVariance(pt.variance),
+          ];
+        }
+        return [
+          pt.pointId,
+          round3(pt.northing),
+          round3(pt.easting),
+          round3(pt.asBuiltElevation),
+          round3(pt.designElevation),
+          round3(reportInfo.designThickness),
+          round3(pt.adjustedDesignElevation),
+          pt.status,
+          formatSignedVariance(pt.variance),
+        ];
+      });
+
+    const head = hasSO
+      ? [["Point ID", "Station", "Offset",
+          `As-Built Elev (${ul})`, `Design Elev (${ul})`,
+          "Status", "Variance"]]
+      : [["Point ID", "Northing", "Easting",
+          `As-Built Elev (${ul})`, `Design Elev (${ul})`,
+          `Design Thick (${ul})`, `Adj. Design Elev (${ul})`,
+          "Status", "Variance"]];
+
+    // Column indices for Status and Variance differ by mode
+    const statusColIdx  = hasSO ? 5 : 7;
+    const varianceColIdx = hasSO ? 6 : 8;
 
     autoTable(doc, {
       startY: cursorY,
       margin: { left: margin, right: margin },
-      head: [[
-        "Point ID", "Northing", "Easting",
-        `As-Built Elev (${ul})`, `Design Elev (${ul})`,
-        `Design Thick (${ul})`, `Adj. Design Elev (${ul})`,
-        "Status", "Variance",
-      ]],
+      head,
       body: matchedRows,
       styles: {
         fontSize: 7.5,
@@ -224,22 +283,18 @@ export function exportPdf(
         fontSize: 7,
       },
       alternateRowStyles: { fillColor: [248, 250, 252] },
-      // Colour the Status and Cut/Fill Amount cells by cut/fill result
-      // Add background highlight for tolerance-based Cut/Fill statuses
       didParseCell(data) {
         if (data.section === "body") {
-          const pt = result.matched[data.row.index];
+          const pt = displayRows[data.row.index] as typeof result.matched[0];
           const status = pt?.status;
 
-          // Column 7 = Status, Column 8 = Cut/Fill Amount
-          if (data.column.index === 7 || data.column.index === 8) {
+          if (data.column.index === statusColIdx || data.column.index === varianceColIdx) {
             if (status === "Cut")       data.cell.styles.textColor = COLOR_CUT;
             else if (status === "Fill") data.cell.styles.textColor = COLOR_FILL;
             else                        data.cell.styles.textColor = COLOR_ON_GRADE;
             data.cell.styles.fontStyle = "bold";
           }
 
-          // Apply row background highlighting for Cut/Fill (tolerance-based)
           if (status === "Cut") {
             data.cell.styles.fillColor = COLOR_CUT_HIGHLIGHT;
           } else if (status === "Fill") {
@@ -248,12 +303,55 @@ export function exportPdf(
         }
       },
       didDrawPage() {
-        // Re-draw page number on each new page
         addPageNumber(doc);
       },
     });
 
     cursorY = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
+
+    // ── 3b. SO warnings footnote table (only when warnings exist) ──────────
+    if (hasSO) {
+      const warnRows = (displayRows as PointWithSO[]).filter(
+        (pt) => pt.stationOffset.warning !== "OK"
+      );
+      if (warnRows.length > 0) {
+        if (cursorY > doc.internal.pageSize.getHeight() - 40) {
+          doc.addPage();
+          cursorY = margin;
+        }
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8);
+        doc.setTextColor(180, 83, 9); // amber-700
+        doc.text(
+          `Station/Offset Calculation Warnings (${warnRows.length})`,
+          margin, cursorY
+        );
+        cursorY += 3;
+
+        autoTable(doc, {
+          startY: cursorY,
+          margin: { left: margin, right: margin },
+          head: [["Point ID", "Station", "Offset", "Warning"]],
+          body: warnRows.map((pt) => [
+            pt.pointId,
+            pt.stationOffset.stationFormatted,
+            pt.stationOffset.offsetFormatted,
+            pt.stationOffset.warning,
+          ]),
+          styles: { fontSize: 7, cellPadding: 1.5 },
+          headStyles: {
+            fillColor: [217, 119, 6],
+            textColor: COLOR_HEADER_TEXT,
+            fontStyle: "bold",
+            fontSize: 7,
+          },
+          alternateRowStyles: { fillColor: [255, 251, 235] },
+          didDrawPage() { addPageNumber(doc); },
+        });
+
+        cursorY = (doc as jsPDF & { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
+      }
+    }
   }
 
   // ── 4. Unmatched As-Built table ──────────────────────────────────────────

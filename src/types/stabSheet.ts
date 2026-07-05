@@ -125,3 +125,95 @@ export interface ReportSummary {
   unmatchedAsBuiltCount: number;
   unmatchedDesignCount: number;
 }
+
+// ---------------------------------------------------------------------------
+// LandXML Alignment types
+// ---------------------------------------------------------------------------
+
+/** A tangent (straight) segment within an alignment CoordGeom. */
+export interface AlignmentLine {
+  type: "Line";
+  /** Northing of start point */
+  startN: number;
+  /** Easting of start point */
+  startE: number;
+  /** Northing of end point */
+  endN: number;
+  /** Easting of end point */
+  endE: number;
+  /** Horizontal length of segment */
+  length: number;
+  /** Station at the start of this segment */
+  staStart: number;
+}
+
+/** A circular arc segment within an alignment CoordGeom. */
+export interface AlignmentCurve {
+  type: "Curve";
+  /** Northing of start point */
+  startN: number;
+  /** Easting of start point */
+  startE: number;
+  /** Northing of end point */
+  endN: number;
+  /** Easting of end point */
+  endE: number;
+  /** Northing of curve center */
+  centerN: number;
+  /** Easting of curve center */
+  centerE: number;
+  /** Curve radius */
+  radius: number;
+  /** Arc length */
+  length: number;
+  /** Rotation direction: "cw" = clockwise, "ccw" = counter-clockwise */
+  rot: "cw" | "ccw";
+  /** Station at the start of this segment */
+  staStart: number;
+}
+
+export type AlignmentSegment = AlignmentLine | AlignmentCurve;
+
+/** A parsed LandXML alignment. */
+export interface ParsedAlignment {
+  /** Alignment name from the XML */
+  name: string;
+  /** Starting station of the alignment */
+  staStart: number;
+  /** Total geometric length of all segments */
+  length: number;
+  /** Ordered list of geometry segments */
+  segments: AlignmentSegment[];
+}
+
+// ---------------------------------------------------------------------------
+// Station/Offset result types
+// ---------------------------------------------------------------------------
+
+/** Warning codes for station/offset calculation results. */
+export type StationOffsetWarning =
+  | "OK"
+  | "OUTSIDE_ALIGNMENT_LIMITS"
+  | "AMBIGUOUS_PROJECTION"
+  | "UNABLE_TO_CALCULATE";
+
+/** Side of centerline: Left or Right */
+export type OffsetSide = "L" | "R";
+
+/** Station/offset result for one point relative to a parsed alignment. */
+export interface StationOffsetResult {
+  /** Raw station value (e.g. 1245.67) */
+  station: number;
+  /** Formatted station string (e.g. "12+45.67") */
+  stationFormatted: string;
+  /** Perpendicular offset distance (always positive) */
+  offset: number;
+  /** Side of the centerline */
+  side: OffsetSide;
+  /** Formatted offset string (e.g. "L 12.34") */
+  offsetFormatted: string;
+  /** Type of segment that produced the result */
+  segmentType: "Line" | "Curve";
+  /** Calculation warning */
+  warning: StationOffsetWarning;
+}

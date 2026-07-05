@@ -19,14 +19,17 @@ import type {
   RawAsBuiltPoint,
   RawDesignPoint,
   MatchResult,
+  ParsedAlignment,
 } from "@/src/types/stabSheet";
 import ReportInfoForm from "@/src/components/ReportInfoForm";
 import FileUpload from "@/src/components/FileUpload";
+import CenterlineUpload from "@/src/components/CenterlineUpload";
 import SummaryCards from "@/src/components/SummaryCards";
 import ResultsTable from "@/src/components/ResultsTable";
 import { parseAsBuiltFile, parseDesignFile } from "@/src/lib/parseSurveyFile";
 import { matchAndCalculate, buildSummary } from "@/src/lib/stabSheetCalculations";
 import { exportPdf } from "@/src/lib/exportPdf";
+import { applyStationOffsets } from "@/src/lib/stationOffset";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -117,6 +120,9 @@ export default function StabSheetPage() {
   // The calculated match result
   const [matchResult, setMatchResult] = useState<MatchResult>(EMPTY_MATCH_RESULT);
 
+  // Optional centerline alignment for station/offset calculations
+  const [alignment, setAlignment] = useState<ParsedAlignment | null>(null);
+
   // Re-run matching whenever either point set, design thickness, or tolerance changes
   useEffect(() => {
     if (asBuiltPoints.length === 0 || designPoints.length === 0) {
@@ -187,6 +193,11 @@ export default function StabSheetPage() {
     matchResult.matched.length > 0 ||
     matchResult.unmatchedAsBuilt.length > 0 ||
     matchResult.unmatchedDesign.length > 0;
+
+  // When an alignment is loaded, annotate matched points with station/offset
+  const matchedWithSO = alignment
+    ? applyStationOffsets(matchResult.matched, alignment)
+    : null;
 
   // ── Render ──────────────────────────────────────────────────────────────
 
@@ -280,6 +291,9 @@ export default function StabSheetPage() {
           </div>
         </div>
 
+        {/* Section 2b – Optional centerline XML */}
+        <CenterlineUpload onAlignmentSelected={setAlignment} />
+
         {/* Prompt when only one file is loaded */}
         {(asBuiltPoints.length > 0) !== (designPoints.length > 0) && (
           <div className="rounded-lg border border-blue-200 bg-blue-50 px-5 py-4 text-sm text-blue-700">
@@ -298,7 +312,7 @@ export default function StabSheetPage() {
             <div className="flex justify-end">
               <button
                 onClick={() =>
-                  exportPdf(reportInfo, matchResult, summary)
+                  exportPdf(reportInfo, matchResult, summary, matchedWithSO, alignment)
                 }
                 className="inline-flex items-center gap-2 rounded-lg bg-blue-700 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-800 active:scale-95 transition-all"
               >
@@ -318,6 +332,7 @@ export default function StabSheetPage() {
             result={matchResult}
             designThickness={reportInfo.designThickness}
             tolerance={reportInfo.tolerance}
+            matchedWithSO={matchedWithSO}
           />
         )}
 
