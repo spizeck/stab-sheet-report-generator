@@ -1,0 +1,68 @@
+<?xml version="1.0" ?>
+<LandXML xmlns="http://www.landxml.org/schema/LandXML-1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.landxml.org/schema/LandXML-1.2 http://www.landxml.org/schema/LandXML-1.2/LandXML-1.2.xsd" version="1.2" date="2026-07-17" time="09:37:48" readOnly="false" language="English" >
+<Project name="" desc="" />
+<Application name="Carlson Software" desc="LandXML conversion" manufacturer="Carlson Software" version="2026" manufacturerURL="www.carlsonsw.com"></Application>
+<Units>
+<Imperial areaUnit="squareFoot" linearUnit="USSurveyFoot" volumeUnit="cubicFeet" temperatureUnit="fahrenheit" pressureUnit="inHG" diameterUnit="inch" />
+</Units>
+<Alignments>
+<Alignment name="KENNEY ROAD" desc="" staStart="1000.000000" length="8101.5392">
+<CoordGeom name="KENNEY ROAD">
+<Line length="22.6207" dir="3.84172634">
+<Start>670826.1332 1241338.0470</Start>
+<End>670811.5583 1241320.7477</End>
+</Line>
+<Curve rot="ccw" chord="43.0104" crvType="arc" delta="0.43349036" dirEnd="4.27521669" dirStart="3.84172633" length="43.3490" radius="99.9999" tangent="22.02041329">
+<Start>670811.5583 1241320.7477</Start>
+<Center>670735.0827 1241385.1796</Center>
+<End>670777.4206 1241294.5844</End>
+</Curve>
+<Line length="106.1295" dir="4.27521670">
+<Start>670777.4206 1241294.5844</Start>
+<End>670681.2723 1241249.6514</End>
+</Line>
+<Curve rot="ccw" chord="181.3963" crvType="arc" delta="0.39694059" dirEnd="4.67215729" dirStart="4.27521670" length="182.5927" radius="460.0001" tangent="92.51427853">
+<Start>670681.2723 1241249.6514</Start>
+<Center>670486.5178 1241666.3896</Center>
+<End>670505.0194 1241206.7618</End>
+</Curve>
+<Line length="2266.6770" dir="4.67215729">
+<Start>670505.0194 1241206.7618</Start>
+<End>668240.1765 1241115.5941</End>
+</Line>
+<Curve rot="ccw" chord="270.3171" crvType="arc" delta="1.58286517" dirEnd="6.25502246" dirStart="4.67215729" length="300.7444" radius="190.0000" tangent="192.30704098">
+<Start>668240.1765 1241115.5941</Start>
+<Center>668232.5346 1241305.4404</Center>
+<End>668042.6099 1241300.0901</End>
+</Curve>
+<Line length="815.0913" dir="6.25502246">
+<Start>668042.6099 1241300.0901</Start>
+<End>668019.6576 1242114.8582</End>
+</Line>
+<Curve rot="cw" chord="90.1468" crvType="arc" delta="-1.04908111" dirEnd="5.20594134" dirStart="6.25502246" length="94.4173" radius="90.0000" tangent="52.07459936">
+<Start>668019.6576 1242114.8582</Start>
+<Center>667929.6933 1242112.3239</Center>
+<End>667972.3315 1242191.5829</End>
+</Curve>
+<Curve rot="cw" chord="209.3708" crvType="arc" delta="-0.52959440" dirEnd="4.67634694" dirStart="5.20594134" length="211.8378" radius="400.0001" tangent="108.46595270">
+<Start>667972.3315 1242191.5829</Start>
+<Center>667782.8286 1241839.3206</Center>
+<End>667768.4149 1242239.0609</End>
+</Curve>
+<Line length="863.6020" dir="4.67634694">
+<Start>667768.4149 1242239.0609</Start>
+<End>666905.3737 1242207.9417</End>
+</Line>
+<Curve rot="ccw" chord="1400.3062" crvType="arc" delta="1.64586890" dirEnd="6.32221584" dirStart="4.67634694" length="1571.8048" radius="955.0000" tangent="1029.52677167">
+<Start>666905.3737 1242207.9417</Start>
+<Center>666870.9610 1243162.3215</Center>
+<End>665916.6883 1243199.5862</End>
+</Curve>
+<Line length="1622.6727" dir="0.03903053">
+<Start>665916.6883 1243199.5862</Start>
+<End>665980.0060 1244821.0230</End>
+</Line>
+</CoordGeom>
+</Alignment>
+</Alignments>
+</LandXML>

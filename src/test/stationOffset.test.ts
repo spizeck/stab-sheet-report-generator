@@ -163,17 +163,11 @@ describe('calculateStationOffset – Line segment', () => {
 // =============================================================================
 
 /**
- * Builds an alignment with a single CCW circular arc.
- * Center at (0, 100), radius=100.
- * Start point at (0,0) – i.e. center at (0,100) means startN=0, startE=0,
- * center at (0,100), arc sweeps 90° CCW so end is at (100,100).
- *
- * Wait – let's think geometrically:
- * Center = (N=0, E=100)
- * Radius = 100
- * Start  = (N=0, E=0)   – at angle 180° from center in E axis (i.e. atan2(E,N) = atan2(-100,0) = -90° = 270°)
- * For 90° CCW arc (0.5*pi radians):
- *   end angle = 270° + 90° = 360° = 0° → End = (N=100, E=100)
+ * Builds an alignment with a single 90° CCW circular arc.
+ * Center at (0, 0). Start at angle 0° on the +E axis, end at 90° on the +N axis.
+ * Start  = (N=0, E=100)
+ * End    = (N=100, E=0)
+ * Center = (N=0, E=0)
  * Arc length = 100 * π/2 ≈ 157.08
  */
 function makeCurveAlignment(): ParsedAlignment {
@@ -187,11 +181,11 @@ function makeCurveAlignment(): ParsedAlignment {
       {
         type: 'Curve',
         startN: 0,
-        startE: 0,
+        startE: 100,
         endN: 100,
-        endE: 100,
+        endE: 0,
         centerN: 0,
-        centerE: 100,
+        centerE: 0,
         radius,
         length: arcLength,
         rot: 'ccw',
@@ -205,36 +199,98 @@ describe('calculateStationOffset – Curve segment', () => {
   const alignment = makeCurveAlignment()
 
   it('returns OK for a point exactly on the curve', () => {
-    // Point on the arc at 45° swept: (N=sin(45°)*100, E=100-cos(45°)*100)
-    // Actually: center=(0,100). At 45° swept from start (270°) CCW → angle = 315°
-    // Point = center + radius * (cos(315°), sin(315°)) = (0 + 100*cos(315°), 100 + 100*sin(315°))
-    // cos(315°)=√2/2≈0.7071, sin(315°)=-√2/2≈-0.7071
-    // Point ≈ (70.71, 29.29)
-    const pN = 100 * Math.cos(-Math.PI / 4)           // ≈ 70.71
-    const pE = 100 + 100 * Math.sin(-Math.PI / 4)     // ≈ 29.29
+    // Point on the 45° point of the arc: (E=100*cos(45°), N=100*sin(45°)) ≈ (70.71, 70.71)
+    const midAngle = Math.PI / 4
+    const pE = 100 * Math.cos(midAngle)
+    const pN = 100 * Math.sin(midAngle)
     const result = calculateStationOffset(pN, pE, alignment)
     expect(result.warning).toBe('OK')
     expect(result.offset).toBeCloseTo(0, 2)
+    expect(result.station).toBeCloseTo(1000 + alignment.segments[0].length / 2, 1)
     expect(result.segmentType).toBe('Curve')
+    // Inside a CCW curve is to the LEFT of travel
+    expect(result.side).toBe('L')
   })
 
   it('returns a positive offset for a point outside the curve', () => {
-    // Scale center→point vector by 1.1 (outside the arc)
-    const pN = 100 * Math.cos(-Math.PI / 4) * 1.1
-    const pE = 100 + 100 * Math.sin(-Math.PI / 4) * 1.1  // Note: offset from center, not from E=0
-    // Actually recalculate: point = center + 1.1*radius*(direction)
-    // direction from center to midpoint of arc:
-    const midAngle = -Math.PI / 4  // 315° in standard math coords
-    const pN2 = 0 + 110 * Math.cos(midAngle)
-    const pE2 = 100 + 110 * Math.sin(midAngle)
-    const result = calculateStationOffset(pN2, pE2, alignment)
+    // Point 10 ft outside the arc (dist = 110)
+    const midAngle = Math.PI / 4
+    const pE = 110 * Math.cos(midAngle)
+    const pN = 110 * Math.sin(midAngle)
+    const result = calculateStationOffset(pN, pE, alignment)
     expect(result.warning).toBe('OK')
     expect(result.offset).toBeCloseTo(10, 1)
+    // Outside a CCW curve is to the RIGHT of travel
+    expect(result.side).toBe('R')
   })
 
-  it('returns OUTSIDE_ALIGNMENT_LIMITS for a point well away from arc', () => {
-    const result = calculateStationOffset(500, 500, alignment)
+  it('returns a positive offset for a point inside the curve', () => {
+    // Point 10 ft inside the arc (dist = 90)
+    const midAngle = Math.PI / 4
+    const pE = 90 * Math.cos(midAngle)
+    const pN = 90 * Math.sin(midAngle)
+    const result = calculateStationOffset(pN, pE, alignment)
+    expect(result.warning).toBe('OK')
+    expect(result.offset).toBeCloseTo(10, 1)
+    // Inside a CCW curve is to the LEFT of travel
+    expect(result.side).toBe('L')
+  })
+
+  it('returns OUTSIDE_ALIGNMENT_LIMITS for a point outside the arc angular range', () => {
+    // The arc spans 0° to 90°. (500, -500) is at -45°, outside that range.
+    const result = calculateStationOffset(500, -500, alignment)
     expect(result.warning).toBe('OUTSIDE_ALIGNMENT_LIMITS')
+  })
+})
+
+// =============================================================================
+// CW arc
+// =============================================================================
+
+describe('calculateStationOffset – CW Curve segment', () => {
+  // 90° CW arc: start at +N (E=0, N=100), end at +E (E=100, N=0), center at origin.
+  const alignment: ParsedAlignment = {
+    name: 'CW CURVE',
+    staStart: 1000,
+    length: 100 * Math.PI / 2,
+    segments: [
+      {
+        type: 'Curve',
+        startN: 100,
+        startE: 0,
+        endN: 0,
+        endE: 100,
+        centerN: 0,
+        centerE: 0,
+        radius: 100,
+        length: 100 * Math.PI / 2,
+        rot: 'cw',
+        staStart: 1000,
+      },
+    ],
+  }
+
+  it('returns OK for a point on the CW arc', () => {
+    // Midpoint at 45° (E=70.71, N=70.71)
+    const pE = 100 * Math.cos(Math.PI / 4)
+    const pN = 100 * Math.sin(Math.PI / 4)
+    const result = calculateStationOffset(pN, pE, alignment)
+    expect(result.warning).toBe('OK')
+    expect(result.offset).toBeCloseTo(0, 2)
+    expect(result.station).toBeCloseTo(1000 + alignment.segments[0].length / 2, 1)
+    expect(result.segmentType).toBe('Curve')
+    // Inside a CW curve is to the RIGHT of travel
+    expect(result.side).toBe('R')
+  })
+
+  it('returns outside offset for a point outside the CW arc', () => {
+    const pE = 110 * Math.cos(Math.PI / 4)
+    const pN = 110 * Math.sin(Math.PI / 4)
+    const result = calculateStationOffset(pN, pE, alignment)
+    expect(result.warning).toBe('OK')
+    expect(result.offset).toBeCloseTo(10, 1)
+    // Outside a CW curve is to the LEFT of travel
+    expect(result.side).toBe('L')
   })
 })
 

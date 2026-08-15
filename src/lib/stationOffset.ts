@@ -17,7 +17,6 @@
 
 import type {
   ParsedAlignment,
-  AlignmentSegment,
   AlignmentLine,
   AlignmentCurve,
   StationOffsetResult,
@@ -80,6 +79,10 @@ interface LineProjection {
  * Projects a point perpendicularly onto an infinite line defined by the
  * segment tangent, then checks if the foot lies within [0, segment.length].
  *
+ * Uses the standard (x=E, y=N) right-handed coordinate plane, where
+ * positive cross product means the point is to the LEFT of the direction
+ * of travel (LandXML / map convention).
+ *
  * Returns null if the perpendicular foot is outside the segment.
  */
 function projectOntoLine(
@@ -87,22 +90,22 @@ function projectOntoLine(
   pN: number,
   pE: number
 ): LineProjection | null {
-  // Direction vector of segment (N, E)
-  const dN = seg.endN - seg.startN;
+  // Direction vector of segment in (E, N) coordinates
   const dE = seg.endE - seg.startE;
-  const segLen = Math.sqrt(dN * dN + dE * dE);
+  const dN = seg.endN - seg.startN;
+  const segLen = Math.sqrt(dE * dE + dN * dN);
   if (segLen < 1e-10) return null;
 
   // Unit tangent
-  const tN = dN / segLen;
   const tE = dE / segLen;
+  const tN = dN / segLen;
 
-  // Vector from segment start to point
-  const vN = pN - seg.startN;
+  // Vector from segment start to point in (E, N) coordinates
   const vE = pE - seg.startE;
+  const vN = pN - seg.startN;
 
   // Parametric projection distance along tangent
-  const along = dot(vN, vE, tN, tE);
+  const along = dot(vE, vN, tE, tN);
 
   // Use a small epsilon to keep the bounds half-open: [epsilon, segLen-epsilon].
   // This avoids treating endpoint hits as valid projections when the same
@@ -110,13 +113,12 @@ function projectOntoLine(
   const EPS = 1e-6;
   if (along < EPS || along > segLen - EPS) return null;
 
-  // Perpendicular (signed) distance.
-  // cross(tN, tE, vN, vE) = tN*vE - tE*vN
-  // In N/E coords (N=x, E=y), positive cross → point is to the RIGHT of travel;
-  // negative cross → point is to the LEFT of travel.
-  const signed = cross(tN, tE, vN, vE);
+  // Signed perpendicular distance.
+  // cross(tE, tN, vE, vN) = tE*vN - tN*vE
+  // Positive → point is to the LEFT of the direction of travel.
+  const signed = cross(tE, tN, vE, vN);
   const offset = Math.abs(signed);
-  const side: OffsetSide = signed >= 0 ? "R" : "L";
+  const side: OffsetSide = signed >= 0 ? "L" : "R";
 
   return {
     station: seg.staStart + along,
@@ -141,6 +143,9 @@ interface CurveProjection {
  * Projects a point radially from the curve center onto the arc.
  * The station along the arc is computed from the swept angle.
  *
+ * Uses the standard (x=E, y=N) right-handed coordinate plane, matching the
+ * LandXML "dir" convention (0 = east, angle increases counter-clockwise).
+ *
  * Returns null if the radial foot is outside the arc's angular extent.
  */
 function projectOntoCurve(
@@ -148,36 +153,42 @@ function projectOntoCurve(
   pN: number,
   pE: number
 ): CurveProjection | null {
-  // Vector from center to point
-  const vN = pN - seg.centerN;
+  // Vector from center to point in (E, N) coordinates
   const vE = pE - seg.centerE;
-  const distToCenter = Math.sqrt(vN * vN + vE * vE);
+  const vN = pN - seg.centerN;
+  const distToCenter = Math.sqrt(vE * vE + vN * vN);
   if (distToCenter < 1e-10) return null;
 
   // Total arc angle
   const totalAngle = seg.length / seg.radius;
 
-  // Angle from center to start point
-  const startVN = seg.startN - seg.centerN;
-  const startVE = seg.startE - seg.centerE;
-  const angleToStart = Math.atan2(startVE, startVN);
+  // Standard polar angle from the +E axis, CCW toward +N.
+  // This is the LandXML "dir" convention.
+  const startE = seg.startE - seg.centerE;
+  const startN = seg.startN - seg.centerN;
+  const angleToStart = Math.atan2(startN, startE);
 
-  // Angle from center to query point
-  const angleToPoint = Math.atan2(vE, vN);
+  const angleToPoint = Math.atan2(vN, vE);
 
-  // Swept angle from start to point, accounting for rotation direction
+  // Helper: bring any angle into [0, 2π)
+  const normalize = (a: number) => {
+    let x = a % (2 * Math.PI);
+    if (x < 0) x += 2 * Math.PI;
+    return x;
+  };
+
+  // Swept angle from start to point, accounting for rotation direction.
+  // For CCW we use the non-negative CCW angle; for CW we use the
+  // non-negative CW angle.
   let swept: number;
   if (seg.rot === "ccw") {
-    swept = angleToPoint - angleToStart;
-    if (swept < 0) swept += 2 * Math.PI;
+    swept = normalize(angleToPoint - angleToStart);
   } else {
-    // clockwise: angles decrease
-    swept = angleToStart - angleToPoint;
-    if (swept < 0) swept += 2 * Math.PI;
+    swept = normalize(angleToStart - angleToPoint);
   }
 
   // Check if the projection falls within the arc extent
-  if (swept < 0 || swept > totalAngle + 1e-9) return null;
+  if (swept > totalAngle + 1e-9) return null;
 
   // Clamp to avoid tiny numerical overruns
   swept = Math.min(swept, totalAngle);
@@ -189,31 +200,31 @@ function projectOntoCurve(
   // Offset: distance from center minus radius
   const offset = Math.abs(distToCenter - seg.radius);
 
-  // Side: inside arc = right of direction of travel for ccw, left for cw
-  // More precisely: if distance to center < radius → inside the arc
-  // For ccw rotation: inside = right; outside = left
-  // Determine using cross product of (start→center) direction and (center→point)
-  // The "left" side is defined relative to the direction of travel along the arc.
-
-  // Direction of travel at the projection point on the arc:
-  // For ccw: tangent perpendicular CCW from radial = rotate radial 90° CCW
-  // unit radial at projection: (vN/distToCenter, vE/distToCenter)
-  const radN = vN / distToCenter;
+  // Unit radial from center to the point in (E, N)
   const radE = vE / distToCenter;
+  const radN = vN / distToCenter;
 
-  let tangN: number, tangE: number;
+  // Tangent at the projected arc point, in (E, N).
+  // For a CCW arc: rotate radial 90° CCW → (-radN,  radE)
+  // For a CW arc:  rotate radial 90° CW  → ( radN, -radE)
+  let tangE: number, tangN: number;
   if (seg.rot === "ccw") {
-    tangN = -radE;
-    tangE =  radN;
-  } else {
-    tangN =  radE;
     tangE = -radN;
+    tangN =  radE;
+  } else {
+    tangE =  radN;
+    tangN = -radE;
   }
 
-  // Sign: cross(tangent, radial) in N/E coords.
-  // Positive → point is to the RIGHT of direction of travel.
-  const signedOffset = cross(tangN, tangE, radN, radE) * distToCenter;
-  const side: OffsetSide = signedOffset >= 0 ? "R" : "L";
+  // The point's offset vector relative to its projection on the arc.
+  // projection = center + radius * (radE, radN)
+  const offsetE = vE - seg.radius * radE;
+  const offsetN = vN - seg.radius * radN;
+
+  // cross(tangent, offsetVector) > 0 means the point is to the LEFT
+  // of the direction of travel.
+  const signed = cross(tangE, tangN, offsetE, offsetN);
+  const side: OffsetSide = signed >= 0 ? "L" : "R";
 
   return {
     station,
